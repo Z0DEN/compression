@@ -15,8 +15,8 @@ fstream FileReader(const std::string &filename) {
     return file;
 }
 
-int getBlockSize(fstream &f) { // файл должен быть открыт на чтение
-    unsigned char byte;
+std::array<int, 2> getFileInfo(fstream &f) { // файл должен быть открыт на чтение
+    unsigned char byte, result;
     f.read(reinterpret_cast<char *>(&byte), 1);
-    return (byte >> 4);
+    return {(byte >> 4), (byte & 0x0F)};
 }

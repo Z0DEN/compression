@@ -6,7 +6,7 @@
 #include <unistd.h>
 using namespace std;
 
-template <typename T> void decoder(fstream &);
+template <typename T> void decoder(fstream &, int);
 template <typename T> void encoder(fstream &);
 
 int main(int argc, char *argv[]) {
@@ -41,17 +41,16 @@ int main(int argc, char *argv[]) {
 
     if (DECODE) {
         fstream f = FileReader(FILENAME);
-        int     bs = getBlockSize(f);
-        cout << bs << '\n';
-        switch (bs) {
+        auto [blocksize, indent] = getFileInfo(f);
+        switch (blocksize) {
         case 1:
-            decoder<char>(f);
+            decoder<char>(f, indent);
             break;
         case 2:
-            decoder<char16_t>(f);
+            decoder<char16_t>(f, indent);
             break;
         case 4:
-            decoder<char32_t>(f);
+            decoder<char32_t>(f, indent);
             break;
 
         default:
@@ -78,27 +77,17 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-template <typename T> void decoder(fstream &f) {
-    Bitset<T> bset(f);
+template <typename T> void decoder(fstream &f, int indent) {
+    ReadBitset<T> bset(f, indent);
+    for (int i = 0; i < 5; i++) {
+        cout << static_cast<char>(bset.readChar());
+    }
 }
 
 template <typename T> void encoder(fstream &f) {
-    Bitset<T> bset(f);
-    // bset += static_cast<T>('d');
-    bset += false;
-    bset += true;
-    bset += false;
+    WriteBitset<T> bset(f);
+    bset += static_cast<T>('t');
+    bset += static_cast<T>('e');
     bset += static_cast<T>('s');
-    bset += true;
-    bset += true;
-    bset += false;
-    bset += true;
-    bset += false;
-    // bset += static_cast<T>('i');
-    bset += true;
-    // bset += false;
-    // bset += true;
-    // bset += false;
-    // bset += static_cast<T>('e');
-    // bset += true;
+    bset += static_cast<T>('t');
 }
