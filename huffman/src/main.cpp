@@ -1,7 +1,7 @@
 #include "../include/huffmanlib.hpp"
-#include <fstream>
-#include <iostream>
+#include <map>
 #include <pthread.h>
+#include <queue>
 #include <string>
 #include <unistd.h>
 using namespace std;
@@ -9,11 +9,27 @@ using namespace std;
 template <typename T> void decoder(fstream &, int);
 template <typename T> void encoder(fstream &);
 
-int main(int argc, char *argv[]) {
-    bool        DECODE = false;
-    std::string FILENAME, TYPENAME;
+template <typename T> struct Node {
+    T     symbol;
+    int   freq;
+    Node *left;
+    Node *right;
 
-    int opt;
+    Node(T s, int f) : symbol(s), freq(f), left(nullptr), right(nullptr) {};
+    Node(int f, Node *l, Node *r) : symbol(0), freq(f), left(l), right(r) {};
+};
+
+template <typename T> struct Compare {
+    bool operator()(Node<T> *a, Node<T> *b) {
+        return a->freq > b->freq;
+    }
+};
+
+static std::string FILENAME, TYPENAME;
+
+int main(int argc, char *argv[]) {
+    bool DECODE = false;
+    int  opt;
     while ((opt = getopt(argc, argv, "df:t:h")) != -1) {
         switch (opt) {
         case 'd':
@@ -61,7 +77,7 @@ int main(int argc, char *argv[]) {
             cout << "Недостаточно параметров. Необходимо указать тип данных\n" << "-h для вызова справки\n";
             return 1;
         }
-        fstream f = FileWriter(FILENAME);
+        fstream f = FileWriter(FILENAME + ".bin");
         if (TYPENAME == "char") {
             encoder<char>(f);
         } else if (TYPENAME == "char16") {
@@ -77,17 +93,41 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-template <typename T> void decoder(fstream &f, int indent) {
-    ReadBitset<T> bset(f, indent);
-    for (int i = 0; i < 5; i++) {
-        cout << static_cast<char>(bset.readChar());
+template <typename T>
+std::priority_queue<Node<T> *, std::vector<Node<T> *>, Compare<T>> buildPriorityQueue(fstream &file) {
+    map<T, int> freq;
+    T           c;
+    while (file.read(reinterpret_cast<char *>(&c), sizeof(T))) {
+        freq[c]++;
     }
+    file.clear();
+    file.seekg(0, std::ios::beg);
+
+    std::priority_queue<Node<T> *, std::vector<Node<T> *>, Compare<T>> pq;
+
+    for (auto &[symbol, freq] : freq) {
+        pq.push(new Node(symbol, freq));
+    }
+
+    return pq;
+}
+
+template <typename T> void decoder(fstream &f, int indent) {
+    fstream       DFile = FileWriter(FILENAME + ".txt");
+    ReadBitset<T> bset(f, indent);
 }
 
 template <typename T> void encoder(fstream &f) {
+    fstream        suorceFile = FileReader(FILENAME);
     WriteBitset<T> bset(f);
-    bset += static_cast<T>('t');
-    bset += static_cast<T>('e');
-    bset += static_cast<T>('s');
-    bset += static_cast<T>('t');
+    auto           pq = buildPriorityQueue<T>(f);
+    while (pq.size() > 1) {
+        Node<T> *a = pq.top();
+        pq.pop();
+        Node<T> *b = pq.top();
+        pq.pop();
+        Node<T> *parent = new Node(a->freq + b->freq, a->symbol == 0 ? b : a, b->symbol == 0 ? b : a);
+        pq.push(parent);
+    }
+    Node<T> *root = pq.top();
 }

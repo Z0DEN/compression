@@ -1,4 +1,5 @@
 #include "../../include/huffmanlib.hpp"
+
 using namespace std;
 
 fstream FileWriter(const std::string &filename) {
