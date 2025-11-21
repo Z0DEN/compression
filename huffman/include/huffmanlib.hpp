@@ -1,5 +1,4 @@
 #pragma once
-#include <array>
 #include <cstddef>
 #include <fstream>
 #include <iostream>
@@ -11,10 +10,17 @@ inline void rewriteByte(fstream &file, size_t position, unsigned char newByte) {
     file.write(reinterpret_cast<char *>(&newByte), 1);
 }
 
-template <typename T> class WriteBitset {
-    fstream          &File;
-    int               Length;
-    unsigned long int Set;
+class WriteBitset {
+    fstream     &File;
+    int          Length;
+    unsigned int Set;
+
+    void print(unsigned char byte) {
+        for (int bit = 7; bit >= 0; --bit) {
+            std::cout << ((byte >> bit) & 1);
+        }
+        std::cout << ' ';
+    }
 
     void write() {
         while (Length >= 8) {
@@ -24,25 +30,18 @@ template <typename T> class WriteBitset {
     }
 
   public:
-    WriteBitset(fstream &F) : File(F), Length(8), Set(0) {
-        if (sizeof(T) > 8) {
-            throw std::runtime_error("Неподходящий тип");
-        }
-    };
+    WriteBitset(fstream &F) : File(F), Length(8), Set(0) {};
 
     ~WriteBitset() {
         unsigned char indnt = (8 - Length % 8) % 8;
-        unsigned char blockSize = static_cast<unsigned char>(sizeof(T)) << 4;
-        unsigned char byte = blockSize | indnt;
         for (int i = 0; i < (int)indnt; i++) {
             (*this) += false;
         }
-        rewriteByte(File, 0, byte);
-        File.flush();
+        rewriteByte(File, 0, indnt);
     }
 
     // добавляет в строку бинарный код 1 или 0
-    WriteBitset<T> &operator+=(const bool code) {
+    WriteBitset &operator+=(const bool code) {
         Set = (Set << 1) | code;
         Length++;
         write();
@@ -50,9 +49,9 @@ template <typename T> class WriteBitset {
     }
 
     // добавляет в строку бинарный код символа типа [T]
-    WriteBitset<T> &operator+=(const T &ch) {
-        Set = (Set << (sizeof(T) * 8)) | (ch);
-        Length += sizeof(T) * 8;
+    WriteBitset &operator+=(const unsigned char &ch) {
+        Set = (Set << 8) | static_cast<unsigned int>(ch);
+        Length += 8;
         write();
         return *this;
     }
@@ -61,7 +60,7 @@ template <typename T> class WriteBitset {
         for (int i = obj.Length - 1; i >= 0; i--) {
             out << (bool)(obj.Set >> i & 1);
         }
-        out << ", length = " << obj.Length << ", sizeof(T) = " << sizeof(T) << '\n';
+        out << ", length = " << obj.Length << '\n';
         return out;
     }
 
@@ -69,48 +68,70 @@ template <typename T> class WriteBitset {
     WriteBitset &operator=(const WriteBitset &) = delete;
 };
 
-template <typename T> class ReadBitset {
+class ReadBitset {
     fstream          &File;
     int               Length, Indent;
     unsigned long int Set;
 
-    void read() {
-        char byte;
-        while (File.read(&byte, 1) && Length <= 56) {
-            Set = (Set << 8) | byte;
-            Length += 8;
+    void print(unsigned char byte) {
+        for (int bit = 7; bit >= 0; --bit) {
+            cerr << ((byte >> bit) & 1);
         }
-        if (File.eof() && Indent) {
-            Set >> Indent;
-            Indent = 0;
+        cerr << ' ';
+    }
+
+    void read() {
+        if (File.eof()) {
+            if (Indent) {
+                Set = Set >> Indent;
+                Length -= Indent;
+                Indent = 0;
+            }
+        } else {
+            while (Length <= 56 && !File.eof()) {
+                unsigned char byte;
+                if (File.read(reinterpret_cast<char *>(&byte), 1)) {
+                    Set = (Set << 8) | static_cast<unsigned long int>(byte);
+                    Length += 8;
+                }
+            }
         }
     }
 
   public:
     ReadBitset(fstream &F, int indent = 0) : File(F), Length(0), Set(0), Indent(indent) {
-        if (sizeof(T) > 8) {
-            throw std::runtime_error("Неподходящий тип");
-        }
+        // File.clear();
+        File.seekp(1, ios::beg);
+        read();
     }
 
-    T readChar() {
+    bool isEnd() {
         read();
-        int shift = Length - sizeof(T) * 8;
-        Length -= sizeof(T) * 8;
-        return static_cast<T>(Set >> shift);
+        return !(bool)Length;
+    }
+
+    int getLength() {
+        return Length;
+    }
+
+    unsigned char readChar() {
+        read();
+        unsigned char c = Set >> (Length -= 8);
+        return c;
     }
 
     bool readBit() {
         read();
         Length -= 1;
+        // cout << ((Set >> Length) & 1);
         return (Set >> Length) & 1;
     }
 
     friend ostream &operator<<(ostream &out, const ReadBitset &obj) {
-        for (int i = obj.Length - 1; i >= 0; i--) {
-            out << (bool)(obj.Set >> i & 1);
+        for (int bit = obj.Length - 1; bit >= 0; bit--) {
+            out << ((obj.Set >> bit) & 1);
         }
-        out << ", length = " << obj.Length << ", sizeof(T) =" << sizeof(T) << '\n';
+        out << ", length = " << obj.Length << '\n';
         return out;
     }
 
@@ -118,6 +139,22 @@ template <typename T> class ReadBitset {
     ReadBitset &operator=(const ReadBitset &) = delete;
 };
 
-fstream            FileWriter(const string &);
-fstream            FileReader(const string &);
-std::array<int, 2> getFileInfo(fstream &);
+fstream FileWriter(const std::string &filename) {
+    fstream file(filename, ios::binary | ios::out);
+    if (!file)
+        throw runtime_error("Ошибка открытия для записи");
+    return file;
+}
+
+fstream FileReader(const std::string &filename) {
+    fstream file(filename, ios::binary | ios::in);
+    if (!file)
+        throw runtime_error("Ошибка открытия для чтения");
+    return file;
+}
+
+int getFileInfo(fstream &f) { // файл должен быть открыт на чтение
+    unsigned char byte;
+    f.read(reinterpret_cast<char *>(&byte), 1);
+    return (int)byte;
+}
