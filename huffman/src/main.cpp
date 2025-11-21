@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <unordered_map>
 
+// для читаемости
 using namespace std;
 using uchar = unsigned char;
 using Code = std::vector<bool>;
@@ -33,6 +34,7 @@ void freeTree(Node *n) {
     delete n;
 }
 
+// компаратор для priority_queue
 struct Compare {
     bool operator()(Node *a, Node *b) {
         return a->freq > b->freq;
@@ -74,11 +76,11 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
+// Воссоздает дерево по обходу из файла используя для чтения методы ReadBitset
 Node *buildTreeFromFile(ReadBitset &bset) {
     if (bset.isEnd()) {
         throw std::runtime_error("Файл внезапно закончился");
     }
-    // cerr << bset << "\n";
     if (bset.readBit()) {
         return new Node(bset.readChar(), 0);
     } else {
@@ -89,8 +91,8 @@ Node *buildTreeFromFile(ReadBitset &bset) {
 }
 
 void decoder(string &FILENAME) {
-    fstream    f = FileReader(FILENAME);
-    fstream    DFile = FileWriter(FILENAME + ".txt");
+    fstream    f = FileReader(FILENAME);              // сжатый файл (например file.txt.bin)
+    fstream    DFile = FileWriter(FILENAME + ".txt"); // декодированный файл (file.txt.bin.txt)
     int        indent = getFileInfo(f);
     ReadBitset bset(f, indent);
 
@@ -153,7 +155,6 @@ void encoder(string &FILENAME) {
     uchar c;
     while (sourceFile.read(reinterpret_cast<char *>(&c), 1)) {
         const auto value = table.find(c);
-        // cout << reinterpret_cast<char *>(&c);
 
         if (value == table.end()) {
             cout << "Нет кода для символа - " << reinterpret_cast<char *>(&c) << "\n";
@@ -161,12 +162,13 @@ void encoder(string &FILENAME) {
         }
         for (bool bit : value->second) {
             bset += bit;
-            // cout << bit;
         }
-        // cout << "\n";
     }
 }
 
+// Обход дерева в глубину
+// 1. Составляет таблицу кодов
+// 2. Параллельно записывает в bset обход, чтобы при декодировании построить дерево
 void DFS(Node *n, WriteBitset &bset, Code &path, CodeTable &table) {
     if (!n)
         return;
@@ -175,7 +177,7 @@ void DFS(Node *n, WriteBitset &bset, Code &path, CodeTable &table) {
     } else {
         bset += true;
         bset += n->symbol;
-        if (path.empty())
+        if (path.empty()) // если символ всего один, присваиваем ему 0
             path.push_back(false);
         table[n->symbol] = path;
         return;

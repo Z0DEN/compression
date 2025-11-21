@@ -10,18 +10,17 @@ inline void rewriteByte(fstream &file, size_t position, unsigned char newByte) {
     file.write(reinterpret_cast<char *>(&newByte), 1);
 }
 
+// Вспомогательный класс для побайтовой записи в файл произвольной последовательности битов.
+// Стоит заметить что Set содержащий эту последовательность заполняется справа на лево путем сдвига влево и побитового сложения.
+// Для оптимизации занимаемой памяти при большом файле "сброс" битов в файл выполняется после каждого вызова метода += и при условии целого числа байт.
+// Запись выполняется в обратном порядке - сдвиг вправо на Length - 8 ( -1 для бита) чтобы получить следующий байт (бит) и уменьшение Length -= 8 (-1)
+// Да, Set никогда, кроме создания объекта не очищается, актуальная последовательность определяется длиной Length начиная с конца(правой стороны) Set
 class WriteBitset {
     fstream     &File;
     int          Length;
     unsigned int Set;
 
-    void print(unsigned char byte) {
-        for (int bit = 7; bit >= 0; --bit) {
-            std::cout << ((byte >> bit) & 1);
-        }
-        std::cout << ' ';
-    }
-
+    // По мере заполнения Set записывает в файл целый байт из Set
     void write() {
         while (Length >= 8) {
             unsigned char byte = static_cast<unsigned char>(Set >> (Length -= 8));
@@ -30,14 +29,16 @@ class WriteBitset {
     }
 
   public:
-    WriteBitset(fstream &F) : File(F), Length(8), Set(0) {};
+    WriteBitset(fstream &F) : File(F), Length(8), Set(0) {}; // Length(8) для служебного байта с отступом
 
     ~WriteBitset() {
-        unsigned char indnt = (8 - Length % 8) % 8;
-        for (int i = 0; i < (int)indnt; i++) {
-            (*this) += false;
+        unsigned int indent = (8 - Length % 8) % 8;
+        for (int i = 0; i < indent; i++) {
+            (*this) += false; // перегрузка += для bool
         }
-        rewriteByte(File, 0, indnt);
+        rewriteByte(
+            File, 0,
+            indent); // в конце записи определяем сколько нехватает бит до целого байта, дополняем нулями и перезаписываем нулевой байт
     }
 
     // добавляет в строку бинарный код 1 или 0
@@ -48,7 +49,7 @@ class WriteBitset {
         return *this;
     }
 
-    // добавляет в строку бинарный код символа типа [T]
+    // добавляет в строку бинарный код символа char
     WriteBitset &operator+=(const unsigned char &ch) {
         Set = (Set << 8) | static_cast<unsigned int>(ch);
         Length += 8;
@@ -64,24 +65,20 @@ class WriteBitset {
         return out;
     }
 
+    // мой класс нельзя копировать или присваивать т.к. есть поле File которое работает с fstream
     WriteBitset(const WriteBitset &) = delete;
     WriteBitset &operator=(const WriteBitset &) = delete;
 };
 
+// Аналогичный классу WriteBitset класс для чтения последовательности битов.
+// В данном случае Set может содержать 8 байт которые заполняются справа на лево по мере чтения
 class ReadBitset {
     fstream          &File;
     int               Length, Indent;
     unsigned long int Set;
 
-    void print(unsigned char byte) {
-        for (int bit = 7; bit >= 0; --bit) {
-            cerr << ((byte >> bit) & 1);
-        }
-        cerr << ' ';
-    }
-
     void read() {
-        if (File.eof()) {
+        if (File.eof()) { // уберем лишние нули сдвинув Set на Indent и уменьшив длину
             if (Indent) {
                 Set = Set >> Indent;
                 Length -= Indent;
@@ -100,8 +97,7 @@ class ReadBitset {
 
   public:
     ReadBitset(fstream &F, int indent = 0) : File(F), Length(0), Set(0), Indent(indent) {
-        // File.clear();
-        File.seekp(1, ios::beg);
+        File.seekp(1, ios::beg); // Пропускаем "служебный" байт
         read();
     }
 
@@ -123,7 +119,6 @@ class ReadBitset {
     bool readBit() {
         read();
         Length -= 1;
-        // cout << ((Set >> Length) & 1);
         return (Set >> Length) & 1;
     }
 
@@ -154,7 +149,7 @@ fstream FileReader(const std::string &filename) {
 }
 
 int getFileInfo(fstream &f) { // файл должен быть открыт на чтение
-    unsigned char byte;
-    f.read(reinterpret_cast<char *>(&byte), 1);
-    return (int)byte;
+    unsigned char indent;
+    f.read(reinterpret_cast<char *>(&indent), 1);
+    return (int)indent;
 }
