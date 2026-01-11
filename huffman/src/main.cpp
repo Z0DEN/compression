@@ -1,8 +1,6 @@
 #include "../include/huffmanlib.hpp"
 #include <map>
-#include <pthread.h>
 #include <queue>
-#include <string>
 #include <unistd.h>
 #include <unordered_map>
 

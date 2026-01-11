@@ -6,4 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include_directories(include)
 
-add_executable(Huffman src/main.cpp)
+add_executable(Huffman.exe src/main.cpp)
+
+set(CMAKE_EXE_LINKER_FLAGS "-static")
+target_link_libraries(Huffman.exe)
